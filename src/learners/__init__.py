@@ -6,8 +6,10 @@ from .actor_critic_pac_learner import PACActorCriticLearner
 from .actor_critic_pac_dcg_learner import PACDCGLearner
 from .maddpg_learner import MADDPGLearner
 from .ppo_learner import PPOLearner
+from .facmac_learner_discrete import FACMACDiscreteLearner
 REGISTRY = {}
 
+REGISTRY["facmac_learner_discrete"] = FACMACDiscreteLearner
 REGISTRY["q_learner"] = QLearner
 REGISTRY["coma_learner"] = COMALearner
 REGISTRY["qtran_learner"] = QTranLearner

@@ -16,11 +16,21 @@ class BasicMAC:
 
         self.hidden_states = None
 
-    def select_actions(self, ep_batch, t_ep, t_env, bs=slice(None), test_mode=False):
+    def select_actions(self, ep_batch, t_ep, t_env, bs=slice(None), test_mode=False, explore=False):
         # Only select actions for the selected batch elements in bs
         avail_actions = ep_batch["avail_actions"][:, t_ep]
+
+
         agent_outputs = self.forward(ep_batch, t_ep, test_mode=test_mode)
-        chosen_actions = self.action_selector.select_action(agent_outputs[bs], avail_actions[bs], t_env, test_mode=test_mode)
+        if getattr(self.args, "action_selector") == 'gumbel':
+            chosen_actions = self.action_selector.select_action(agent_outputs[bs],
+                                                                avail_actions[bs],
+                                                                t_env,
+                                                                test_mode=test_mode,
+                                                                explore=explore
+                                                                )
+        else:
+            chosen_actions = self.action_selector.select_action(agent_outputs[bs], avail_actions[bs], t_env, test_mode=test_mode)
         return chosen_actions
 
     def forward(self, ep_batch, t, test_mode=False):
@@ -48,8 +58,8 @@ class BasicMAC:
     def load_state(self, other_mac):
         self.agent.load_state_dict(other_mac.agent.state_dict())
 
-    def cuda(self):
-        self.agent.cuda()
+    def cuda(self, device='cuda'):
+        self.agent.cuda(device=device)
 
     def save_models(self, path):
         th.save(self.agent.state_dict(), "{}/agent.th".format(path))

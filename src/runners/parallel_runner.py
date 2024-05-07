@@ -1,3 +1,7 @@
+import time
+
+import wandb
+import datetime
 from envs import REGISTRY as env_REGISTRY
 from functools import partial
 from components.episode_buffer import EpisodeBatch
@@ -44,6 +48,11 @@ class ParallelRunner:
 
         self.log_train_stats_t = -100000
 
+        wandb.init(
+            project='MARC',
+            name=f'{datetime.date.today().day}-{datetime.date.today().month}-{args.name}-{args.env_args["key"]}',
+            config=vars(args), )
+
     def setup(self, scheme, groups, preprocess, mac):
         self.new_batch = partial(EpisodeBatch, scheme, groups, self.batch_size, self.episode_limit + 1,
                                  preprocess=preprocess, device=self.args.device)
@@ -77,6 +86,7 @@ class ParallelRunner:
         # Get the obs, state and avail_actions back
         for parent_conn in self.parent_conns:
             data = parent_conn.recv()
+
             pre_transition_data["state"].append(data["state"])
             pre_transition_data["avail_actions"].append(data["avail_actions"])
             pre_transition_data["obs"].append(data["obs"])
@@ -162,6 +172,8 @@ class ParallelRunner:
                     pre_transition_data["state"].append(data["state"])
                     pre_transition_data["avail_actions"].append(data["avail_actions"])
                     pre_transition_data["obs"].append(data["obs"])
+                    # print('obs', data['obs'][0].shape)
+                    # print('state', data['state'])
 
             # Add post_transiton data into the batch
             self.batch.update(post_transition_data, bs=envs_not_terminated, ts=self.t, mark_filled=False)
@@ -196,7 +208,7 @@ class ParallelRunner:
 
         n_test_runs = max(1, self.args.test_nepisode // self.batch_size) * self.batch_size
         if test_mode and (len(self.test_returns) == n_test_runs):
-            self._log(cur_returns, cur_stats, log_prefix)
+             self._log(cur_returns, cur_stats, log_prefix)
         elif self.t_env - self.log_train_stats_t >= self.args.runner_log_interval:
             self._log(cur_returns, cur_stats, log_prefix)
             if hasattr(self.mac.action_selector, "epsilon"):
@@ -208,6 +220,9 @@ class ParallelRunner:
     def _log(self, returns, stats, prefix):
         self.logger.log_stat(prefix + "return_mean", np.mean(returns), self.t_env)
         self.logger.log_stat(prefix + "return_std", np.std(returns), self.t_env)
+        wandb.log({
+            'epymarl_return_mean': np.mean(returns),
+            'steps': self.t_env})
         returns.clear()
 
         for k, v in stats.items():
@@ -255,7 +270,8 @@ def env_worker(remote, env_fn):
         elif cmd == "get_stats":
             remote.send(env.get_stats())
         elif cmd == "render":
-            env.render()
+            time.sleep(0.5)
+            env.render(actions=actions)
         elif cmd == "save_replay":
             env.save_replay()
         else:

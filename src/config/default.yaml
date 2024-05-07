@@ -39,7 +39,7 @@ add_value_last_step: True
 
 # --- Agent parameters ---
 agent: "rnn" # Default rnn agent
-hidden_dim: 64 # Size of hidden state for default rnn agent
+hidden_dim: 128 # Size of hidden state for default rnn agent
 obs_agent_id: True # Include the agent's one_hot id in the observation
 obs_last_action: True # Include the agent's last action (one_hot) in the observation
 
@@ -47,3 +47,17 @@ obs_last_action: True # Include the agent's last action (one_hot) in the observa
 repeat_id: 1
 label: "default_label"
 hypergroup: null
+run_mode: "sequential"
+n_runners: 1
+continuous_actions: False
+debug: False
+buffer_mode: "transitions"
+n_train: 1
+learn_interval: 100
+testing_on: True
+buffer_cpu_only: True
+runner_scope: episodic
+plot_loss_network: False
+verbose: False
+#optimizer: rmsprop
+target_update_mode: hard

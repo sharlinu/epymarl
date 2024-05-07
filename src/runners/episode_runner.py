@@ -1,8 +1,11 @@
+import time
+from torch.distributions import Categorical
 from envs import REGISTRY as env_REGISTRY
 from functools import partial
 from components.episode_buffer import EpisodeBatch
 import numpy as np
-
+import wandb
+import datetime
 
 class EpisodeRunner:
 
@@ -11,7 +14,6 @@ class EpisodeRunner:
         self.logger = logger
         self.batch_size = self.args.batch_size_run
         assert self.batch_size == 1
-
         self.env = env_REGISTRY[self.args.env](**self.args.env_args)
         self.episode_limit = self.env.episode_limit
         self.t = 0
@@ -25,6 +27,10 @@ class EpisodeRunner:
 
         # Log the first run
         self.log_train_stats_t = -1000000
+        wandb.init(
+            project='MARC',
+            name=f'{datetime.date.today().day}-{datetime.date.today().month}-{args.name}-{args.env_args["key"]}',
+            config=vars(args), )
 
     def setup(self, scheme, groups, preprocess, mac):
         self.new_batch = partial(EpisodeBatch, scheme, groups, self.batch_size, self.episode_limit + 1,
@@ -64,11 +70,20 @@ class EpisodeRunner:
 
             # Pass the entire batch of experiences up till now to the agents
             # Receive the actions for each agent at this timestep in a batch of size 1
-            actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
-
+            if getattr(self.args, "action_selector", "epsilon_greedy") == "gumbel":
+                actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env,
+                                                      test_mode=test_mode,
+                                                      explore=(not test_mode),
+                                                  )
+            else:
+                actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
+            # actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
+            # if getattr(self.args, "action_selector", "epsilon_greedy") == "gumbel":
+            #     env_actions = Categorical(actions).sample()
             reward, terminated, env_info = self.env.step(actions[0])
             if test_mode and self.args.render:
-                self.env.render()
+                time.sleep(0.5)
+                self.env.render(actions=env_actions)
             episode_return += reward
 
             post_transition_data = {
@@ -92,7 +107,7 @@ class EpisodeRunner:
 
         # Select actions in the last stored state
         actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
-        self.batch.update({"actions": actions}, ts=self.t)
+        self.batch.update({"actions": actions}, ts=self.t) # so this is getting the single action, which is I think right because there is also action_onehot
 
         cur_stats = self.test_stats if test_mode else self.train_stats
         cur_returns = self.test_returns if test_mode else self.train_returns
@@ -119,6 +134,9 @@ class EpisodeRunner:
     def _log(self, returns, stats, prefix):
         self.logger.log_stat(prefix + "return_mean", np.mean(returns), self.t_env)
         self.logger.log_stat(prefix + "return_std", np.std(returns), self.t_env)
+        wandb.log({
+            'epymarl_return_mean': np.mean(returns),
+            'steps': self.t_env})
         returns.clear()
 
         for k, v in stats.items():

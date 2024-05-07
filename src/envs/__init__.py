@@ -1,6 +1,7 @@
 from functools import partial
 import pretrained
-from smac.env import MultiAgentEnv, StarCraft2Env
+# from smac.env import MultiAgentEnv, StarCraft2Env
+from envs.multiagentenv import MultiAgentEnv
 import sys
 import os
 import gym
@@ -15,7 +16,7 @@ def env_fn(env, **kwargs) -> MultiAgentEnv:
 
 
 REGISTRY = {}
-REGISTRY["sc2"] = partial(env_fn, env=StarCraft2Env)
+# REGISTRY["sc2"] = partial(env_fn, env=StarCraft2Env)
 
 if sys.platform == "linux":
     os.environ.setdefault(
@@ -46,6 +47,58 @@ class TimeLimit(GymTimeLimit):
             done = len(observation) * [True]
         return observation, reward, done, info
 
+class FlatObs(gym.ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        # self.env = env
+        self.observation_space = None
+        dim = self.n_objects * 2 * 2 + self.n_agents * 4
+        self.single_space = gym.spaces.Box(np.ones(dim)*-1, np.ones(dim)*100, dtype=np.float32)
+        self.observation_space = [self.single_space for _ in range(self.n_agents)]
+
+    def observation(self, obs):
+        """
+        Flattens the observation dictionary into a 1D numpy array
+
+        Args:
+        obs (dict): The observation dictionary.
+
+        Returns:
+        list: List of flattened observation array as np.ndarray
+        """
+        flattened_obs_all = []
+        num_agents = len(obs)
+
+        # Information for each agent
+        for i in range(num_agents):
+            flattened_obs = []
+            agent_key = f'agent_{i}'
+            agent_obs = obs[agent_key]
+
+            # Self information
+            flattened_obs.extend(agent_obs['self']['position'])
+            flattened_obs.append(int(agent_obs['self']['picker']))
+            flattened_obs.append(agent_obs['self']['carrying_object']
+                                 if agent_obs['self']['carrying_object'] is not None else -1)
+
+            # Other agents' information
+            for other_agent in agent_obs['agents']:
+                flattened_obs.extend(other_agent['position'])
+                flattened_obs.append(int(other_agent['picker']))
+                flattened_obs.append(
+                    other_agent['carrying_object'] if other_agent['carrying_object'] is not None else -1)
+
+            # Objects' information
+            for obj in obs[agent_key]['objects']:
+                flattened_obs.extend(obj['position'])
+
+            # Goals' information
+            for goal in obs[agent_key]['goals']:
+                flattened_obs.extend(goal)
+            flattened_obs = np.array(flattened_obs)
+            flattened_obs_all.append(flattened_obs)
+
+        return flattened_obs_all
 
 class FlattenObservation(ObservationWrapper):
     r"""Observation wrapper that flattens the observation of individual agents."""
@@ -82,7 +135,10 @@ class _GymmaWrapper(MultiAgentEnv):
         self.original_env = gym.make(f"{key}", **kwargs)
         self.episode_limit = time_limit
         self._env = TimeLimit(self.original_env, max_episode_steps=time_limit)
-        self._env = FlattenObservation(self._env)
+        if 'macpp' in key:
+            self._env = FlatObs(self._env)
+        else:
+            self._env = FlattenObservation(self._env)
 
         if pretrained_wrapper:
             self._env = getattr(pretrained, pretrained_wrapper)(self._env)
@@ -172,8 +228,11 @@ class _GymmaWrapper(MultiAgentEnv):
         ]
         return self.get_obs(), self.get_state()
 
-    def render(self):
-        self._env.render()
+    def render(self, actions=None):
+        if actions is None:
+            self._env.render()
+        else:
+            self._env.render(actions=actions)
 
     def close(self):
         self._env.close()

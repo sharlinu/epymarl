@@ -29,6 +29,7 @@ entropy_end_ratio: 0.8
 use_rnn: False
 standardise_rewards: False
 q_nstep: 10 # 1 corresponds to normal r + gammaV
+use_cuda: False
 
 
 critic_type: "pac_critic_ns"

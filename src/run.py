@@ -14,7 +14,7 @@ from runners import REGISTRY as r_REGISTRY
 from controllers import REGISTRY as mac_REGISTRY
 from components.episode_buffer import ReplayBuffer
 from components.transforms import OneHot
-
+import wandb
 
 def run(_run, _config, _log):
 
@@ -58,6 +58,7 @@ def run(_run, _config, _log):
     print("Exiting Main")
 
     print("Stopping all threads")
+    # wandb.finish()
     for t in threading.enumerate():
         if t.name != "MainThread":
             print("Thread {} is alive! Is daemon: {}".format(t.name, t.daemon))
@@ -74,7 +75,6 @@ def evaluate_sequential(args, runner):
 
     for _ in range(args.test_nepisode):
         runner.run(test_mode=True)
-
     if args.save_replay:
         runner.save_replay()
 
@@ -91,6 +91,7 @@ def run_sequential(args, logger):
     args.n_agents = env_info["n_agents"]
     args.n_actions = env_info["n_actions"]
     args.state_shape = env_info["state_shape"]
+    args.action_spaces = env_info["action_spaces"]
 
     # Default/Base scheme
     scheme = {
@@ -136,7 +137,7 @@ def run_sequential(args, logger):
 
         if not os.path.isdir(args.checkpoint_path):
             logger.console_logger.info(
-                "Checkpoint directiory {} doesn't exist".format(args.checkpoint_path)
+                "Checkpoint directory {} doesn't exist".format(args.checkpoint_path)
             )
             return
 

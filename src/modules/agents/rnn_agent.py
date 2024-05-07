@@ -21,6 +21,17 @@ class RNNAgent(nn.Module):
         return self.fc1.weight.new(1, self.args.hidden_dim).zero_()
 
     def forward(self, inputs, hidden_state):
+        """
+
+        Parameters
+        ----------
+        inputs : n_agents x obs_size
+        hidden_state: (1,hidden_dim,n_agents)
+
+        Returns
+        -------
+
+        """
         x = F.relu(self.fc1(inputs))
         h_in = hidden_state.reshape(-1, self.args.hidden_dim)
         if self.args.use_rnn:
